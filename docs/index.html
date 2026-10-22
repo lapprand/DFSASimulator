@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulador DFSA</title>
+  <meta name="description" content="Simulador de anticolisão RFID com Dynamic Framed Slotted ALOHA (DFSA): estimadores Lower Bound, Eom-Lee e Algoritmo Q.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <h1>Simulador DFSA</h1>
+      <p class="lead">
+        Anticolisão RFID com <strong>Dynamic Framed Slotted ALOHA</strong>.
+        O leitor abre um <em>frame</em> com <em>L</em> slots, cada etiqueta responde em um slot
+        aleatório e, a partir do número de slots <span class="tag t-empty">vazios</span>,
+        <span class="tag t-success">com sucesso</span> e
+        <span class="tag t-collision">em colisão</span>, um <strong>estimador</strong>
+        decide o tamanho do próximo frame. O processo se repete até todas as etiquetas serem identificadas.
+      </p>
+      <p class="muted small">
+        Projeto da disciplina SISCOM (módulo RFID). Esta página roda o mesmo algoritmo do
+        <a href="https://github.com/lapprand/DFSASimulator/tree/master/src">código Java</a>, portado para JavaScript, direto no navegador.
+      </p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- ========== 1. Passo a passo ========== -->
+    <section class="card">
+      <h2>1. Uma identificação, frame a frame</h2>
+      <p class="muted">Veja como as etiquetas se distribuem nos slots e como o estimador ajusta o tamanho do frame.</p>
+
+      <form id="step-form" class="controls">
+        <label>Etiquetas
+          <input type="number" id="st-tags" value="40" min="1" max="2000">
+        </label>
+        <label>Frame inicial
+          <input type="number" id="st-frame" value="16" min="1" max="2000">
+        </label>
+        <label>Estimador
+          <select id="st-est">
+            <option value="LowerBound">Lower Bound</option>
+            <option value="Eom-Lee" selected>Eom-Lee</option>
+          </select>
+        </label>
+        <div class="buttons">
+          <button type="button" id="st-reset" class="secondary">Reiniciar</button>
+          <button type="button" id="st-next">Próximo frame</button>
+          <button type="button" id="st-play" class="secondary">▶ Automático</button>
+        </div>
+      </form>
+
+      <div class="stats" id="st-stats"></div>
+
+      <div class="legend">
+        <span><i class="sw t-empty"></i>Vazio (0 etiquetas)</span>
+        <span><i class="sw t-success"></i>Sucesso (1 etiqueta)</span>
+        <span><i class="sw t-collision"></i>Colisão (2+ etiquetas)</span>
+      </div>
+      <div id="st-slots" class="slots" aria-live="polite"></div>
+      <p id="st-msg" class="msg"></p>
+
+      <div class="table-wrap">
+        <table id="st-table">
+          <thead>
+            <tr><th>Frame</th><th>Tamanho (L)</th><th>Vazios</th><th>Sucesso</th><th>Colisão</th><th>Identificadas</th><th>Próximo L</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ========== 2. Comparação ========== -->
+    <section class="card">
+      <h2>2. Comparação de estimadores</h2>
+      <p class="muted">
+        Equivalente ao <code>Main.java</code>: para cada quantidade de etiquetas, roda várias identificações e tira a média.
+        O original usava 64 slots iniciais, 100→1000 etiquetas e 2000 simulações por passo.
+      </p>
+
+      <form id="cmp-form" class="controls">
+        <label>Frame inicial
+          <input type="number" id="cmp-frame" value="64" min="1" max="10000">
+        </label>
+        <label>Etiquetas iniciais
+          <input type="number" id="cmp-tags" value="100" min="1" max="5000">
+        </label>
+        <label>Incremento
+          <input type="number" id="cmp-inc" value="100" min="1" max="5000">
+        </label>
+        <label>Passos
+          <input type="number" id="cmp-steps" value="10" min="1" max="50">
+        </label>
+        <label>Simulações/passo
+          <input type="number" id="cmp-sims" value="300" min="1" max="5000">
+        </label>
+        <fieldset>
+          <legend>Estimadores</legend>
+          <label class="check"><input type="checkbox" name="est" value="LowerBound" checked> Lower Bound</label>
+          <label class="check"><input type="checkbox" name="est" value="Eom-Lee" checked> Eom-Lee</label>
+          <label class="check"><input type="checkbox" name="est" value="Q" checked> Algoritmo Q</label>
+        </fieldset>
+        <div class="buttons">
+          <button type="submit" id="cmp-run">Simular</button>
+        </div>
+      </form>
+
+      <div class="progress" hidden><div class="bar"></div><span class="label"></span></div>
+
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-metric="total" aria-selected="true">Total de slots</button>
+        <button type="button" role="tab" data-metric="sv">Slots vazios</button>
+        <button type="button" role="tab" data-metric="sc">Slots em colisão</button>
+        <button type="button" role="tab" data-metric="frames">Frames</button>
+        <button type="button" role="tab" data-metric="efficiency">Eficiência</button>
+      </div>
+      <div class="chart-box"><canvas id="cmp-chart"></canvas></div>
+
+      <div class="table-wrap">
+        <table id="cmp-table"><thead></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- ========== 3. Explicação ========== -->
+    <section class="card">
+      <h2>3. Os estimadores</h2>
+      <dl class="defs">
+        <dt>Lower Bound</dt>
+        <dd>Cada slot em colisão tem pelo menos 2 etiquetas, então o próximo frame é <code>L = 2 · c</code>, onde <em>c</em> é o número de colisões. Simples, mas subestima quando há muitas etiquetas.</dd>
+        <dt>Eom-Lee</dt>
+        <dd>Estima iterativamente γ (etiquetas por colisão) até convergir:
+          <code>β = L / (γ·c + s)</code>, <code>γ = (1 − e<sup>−1/β</sup>) / (β·(1 − (1 + 1/β)·e<sup>−1/β</sup>))</code>.
+          O próximo frame é <code>γ · c</code>.</dd>
+        <dt>Algoritmo Q (EPC Gen2)</dt>
+        <dd>Em vez de frames inteiros, ajusta um valor Q a cada slot: diminui <code>C = 0,2</code> em slot vazio, aumenta em colisão; cada etiqueta responde com probabilidade 1/2<sup>Q</sup>. Aqui cada slot conta como um "frame".</dd>
+        <dt>Eficiência</dt>
+        <dd>Slots com sucesso ÷ total de slots. O máximo teórico do Framed ALOHA é 1/e ≈ 36,8%, atingido quando L ≈ número de etiquetas.</dd>
+      </dl>
+    </section>
+  </main>
+
+  <footer class="wrap muted small">
+    <a href="https://github.com/lapprand/DFSASimulator">Código-fonte no GitHub</a>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="simulator.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
